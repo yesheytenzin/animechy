@@ -8,7 +8,8 @@ RUNTIME="$DIR/.runtime"
 BRIDGE_SRC="$DIR/bridge/animechy-bridge.py"
 BRIDGE_DST="$RUNTIME/animechy-bridge.py"
 VERSION="$(jq -er '.version' "$DIR/manifest.json" 2>/dev/null || echo "1.0.0")"
-VERSION_FILE="$RUNTIME/version"
+# version file outside plugin dir to avoid file-watcher restart loops on fresh install
+VERSION_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/animechy/version"
 
 say()  { printf '\033[1;36m[animechy]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[animechy]\033[0m %s\n' "$*"; }
@@ -81,22 +82,24 @@ else
   say "Python deps OK (requests + bs4 + lxml present)"
 fi
 
-# Verify bridge
+# Verify bridge (non-fatal on fresh install without network — still write version to avoid restart loop)
 say "verifying bridge ..."
 if ! python3 "$BRIDGE_DST" '{"cmd":"ping"}' 2>/dev/null | grep -q '"ok": *true'; then
-  warn "bridge ping failed — check python deps and bridge script"
+  warn "bridge ping failed — check python deps and bridge script; continuing anyway"
   python3 "$BRIDGE_DST" '{"cmd":"ping"}' || true
-  fail "bridge verification failed"
+else
+  say "bridge ping OK"
 fi
 
-# Quick functional test (search)
+# Quick functional test (search) — best-effort, no fail
 say "testing search ..."
 if python3 "$BRIDGE_DST" '{"cmd":"search","q":"one piece"}' 2>/dev/null | grep -q '"ok": *true'; then
   say "search OK"
 else
-  warn "search test failed — network or anidb.app may be blocked"
+  warn "search test failed — network or anidb.app may be blocked (expected on offline fresh install)"
 fi
 
+mkdir -p "$(dirname "$VERSION_FILE")"
 printf '%s\n' "$VERSION" > "$VERSION_FILE.new"
 mv -f "$VERSION_FILE.new" "$VERSION_FILE"
 

@@ -189,17 +189,15 @@ Panel {
 
     // ---------- search history (in-memory + file via Process) ----------
     function loadHistory() {
-        // async load via Process — keep in-memory default empty until loaded
-        historyLoadProc.command = ["bash", "-c", "cat \"$1\" 2>/dev/null || true", "_", "/home/tenzin/.local/state/animechy/hists"];
+        // use $HOME so fresh installs with different usernames work; not watched by plugin watcher
+        historyLoadProc.command = ["bash", "-c", "cat \"$HOME/.local/state/animechy/hists\" 2>/dev/null || cat \"${XDG_STATE_HOME:-$HOME/.local/state}/animechy/hists\" 2>/dev/null || true"];
         historyLoadProc.running = true;
     }
 
     function saveHistory() {
-        // ensure dir exists and write atomically via Process
         var payload = JSON.stringify(root.searchHistory);
-        // escape single quotes for bash
-        var esc = payload.replace(/'/g, "'\"'\"'");
-        historySaveProc.command = ["bash", "-c", "mkdir -p \"$(dirname \"$1\")\" && printf '%s' '" + esc + "' > \"$1\"", "_", "/home/tenzin/.local/state/animechy/hists"];
+        var b64 = Qt.btoa(payload);
+        historySaveProc.command = ["bash", "-c", "mkdir -p \"$HOME/.local/state/animechy\" && echo '" + b64 + "' | base64 -d > \"$HOME/.local/state/animechy/hists\""];
         historySaveProc.running = true;
     }
 
