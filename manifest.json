@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "tenzin.animechy",
+  "name": "Animechy",
+  "version": "1.0.0",
+  "author": "tenzin",
+  "description": "Search and stream anime from anidb.app — click 󰲰 → search → pick episode (sub/dub) → play in mpv. Powered by ani-cli (GPL-3.0).",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  }
+}

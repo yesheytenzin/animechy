@@ -1,0 +1,25 @@
+# runtime
+.runtime/
+.runtime/version
+.runtime/.pending-open
+
+# cache
+.cache/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+pip-log.txt
+
+# editor
+.vscode/
+.idea/
+*~
+
+# logs
+*.log
+
+# preview generated
+preview.png
