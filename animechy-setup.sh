@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Animechy setup — no compile, pure Python bridge
-# Installs Python deps and copies bridge to .runtime, verifies it.
+# Installs Python deps and copies bridge to ~/.cache/animechy, verifies it.
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUNTIME="$DIR/.runtime"
+# CRITICAL: never write inside the plugin dir — omarchy watches it with
+# inotifywait -r and any write triggers a full shell plugin reload (screen blink).
+RUNTIME="${XDG_CACHE_HOME:-$HOME/.cache}/animechy"
 BRIDGE_SRC="$DIR/bridge/animechy-bridge.py"
 BRIDGE_DST="$RUNTIME/animechy-bridge.py"
 VERSION="$(jq -er '.version' "$DIR/manifest.json" 2>/dev/null || echo "1.0.0")"
-# version file outside plugin dir to avoid file-watcher restart loops on fresh install
-VERSION_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/animechy/version"
+VERSION_FILE="$RUNTIME/version"
 
 say()  { printf '\033[1;36m[animechy]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[animechy]\033[0m %s\n' "$*"; }
@@ -101,7 +102,6 @@ printf '%s\n' "$VERSION" > "$VERSION_FILE.new"
 mv -f "$VERSION_FILE.new" "$VERSION_FILE"
 
 say "installed $BRIDGE_DST ($VERSION) — ready"
-# Signal no shell restart needed for python bridge (fast), but keep marker for consistency
-# echo "ANIMECHY_RESTART_SHELL=1"  # not needed
+# No shell restart needed — bridge lives outside the watched plugin dir.
 
 exit 0

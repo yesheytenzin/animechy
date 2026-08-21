@@ -10,7 +10,7 @@ Quickshell bar widget for anime — click **ア** → search → pick season/epi
 omarchy plugin add https://github.com/yesheytenzin/animechy.git --enable
 ```
 
-The `animechy-setup.sh` auto-runs on first click (copies bridge to `.runtime/`, installs `requests`+`bs4`+`lxml`, verifies `ping`+`search`). Click **ア** in the top bar to browse.
+The `animechy-setup.sh` auto-runs on first click (copies bridge to `~/.cache/animechy/`, installs `requests`+`bs4`+`lxml`, verifies `ping`+`search`). Click **ア** in the top bar to browse. Nothing is ever written inside the plugin dir, so the shell never restarts/blinks.
 
 ## Update
 
@@ -50,9 +50,9 @@ omarchy plugin remove tenzin.animechy
 ```bash
 cd ~/.config/omarchy/plugins/tenzin.animechy
 bash animechy-setup.sh
-python3 .runtime/animechy-bridge.py '{"cmd":"search","q":"one piece"}' | jq
-python3 .runtime/animechy-bridge.py '{"cmd":"episodes","id":"one-piece-3880"}' | jq '.items | length'
-python3 .runtime/animechy-bridge.py '{"cmd":"streams","id":"one-piece-3880","episode":"1","mode":"sub"}' | jq
+python3 ~/.cache/animechy/animechy-bridge.py '{"cmd":"search","q":"one piece"}' | jq
+python3 ~/.cache/animechy/animechy-bridge.py '{"cmd":"episodes","id":"one-piece-3880"}' | jq '.items | length'
+python3 ~/.cache/animechy/animechy-bridge.py '{"cmd":"streams","id":"one-piece-3880","episode":"1","mode":"sub"}' | jq
 ```
 
 ## Bridge API

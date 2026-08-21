@@ -12,7 +12,7 @@ Panel {
     property var anchorItem: null
     property var hostWidget: null
     readonly property var barIdentity: hostWidget || root
-    readonly property string bridge: Qt.resolvedUrl(".runtime/animechy-bridge.py").toString().replace(/^file:\/\//, "")
+    readonly property string bridge: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/animechy/animechy-bridge.py"
     // ---------------- state ----------------
     property string view: "home"
     // home | grid | details
