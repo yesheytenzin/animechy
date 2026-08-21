@@ -41,8 +41,6 @@ BarWidget {
     }
 
     function togglePanel() {
-        // Debug notify to confirm click
-        notify("Animechy — Clicked", "bridgeReady=" + root.bridgeReady + " loader=" + panelLoader.status + " opened=" + root.opened, "low");
         if (panelLoader.status === Loader.Error) {
             notify("Animechy — Panel Load Error", "Failed to load Panel.qml — check logs", "critical");
             return;
