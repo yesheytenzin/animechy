@@ -20,6 +20,3 @@ pip-log.txt
 
 # logs
 *.log
-
-# preview generated
-preview.png
