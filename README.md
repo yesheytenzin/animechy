@@ -2,17 +2,7 @@
 
 > **Credit:** [ani-cli](https://github.com/pystardust/ani-cli) by [pystardust](https://github.com/pystardust) (GPL-3.0) — scraping logic for `anidb.app`
 
-Quickshell bar widget for anime — click **ア** → search → pick season/episode (sub/dub) → stream in `mpv`. No Rust/compile, pure Python bridge.
-
-## Prerequisites
-
-- Omarchy Quattro + Quickshell (Hyprland)
-- `python3` ≥3.10 + `mpv`
-
-```bash
-sudo pacman -S mpv python-requests python-beautifulsoup4 python-lxml
-# deps auto-installed via animechy-setup.sh if missing (pipx/uv/pip --user)
-```
+Quickshell bar widget for anime — click **ア** → search → pick season/episode (sub/dub) → stream in `mpv`. No Rust/compile, pure Python bridge. No manual prerequisites — fresh Omarchy already includes `mpv`+`python`; `requests`/`beautifulsoup4`/`lxml` auto-install on first click via `animechy-setup.sh` (`pipx`/`uv`/`pip --user`).
 
 ## Install
 
