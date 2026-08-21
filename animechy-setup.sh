@@ -20,13 +20,10 @@ command -v python3 >/dev/null 2>&1 || fail "python3 not found — install python
 
 mkdir -p "$RUNTIME"
 
-# If already installed and version matches and bridge works, exit early
+# If already installed and version matches, exit early (no ping check — avoids reinstall loop on offline fresh install)
 if [[ -x "$BRIDGE_DST" && -f "$VERSION_FILE" && "$(cat "$VERSION_FILE")" == "$VERSION" ]]; then
-  if python3 "$BRIDGE_DST" '{"cmd":"ping"}' 2>/dev/null | grep -q '"ok": *true'; then
-    say "bridge $VERSION already installed"
-    exit 0
-  fi
-  warn "bridge present but failed ping — reinstalling"
+  say "bridge $VERSION already installed"
+  exit 0
 fi
 
 # Copy bridge
