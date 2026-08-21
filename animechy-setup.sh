@@ -41,54 +41,49 @@ say "installing bridge $VERSION → $BRIDGE_DST"
 install -Dm0755 "$BRIDGE_SRC" "$BRIDGE_DST"
 
 # --- Isolated venv (never mutates user/system site-packages) ---
-# Previous versions used pipx / uv --system / pip --user which mutated global env.
-# Now we create $RUNTIME/venv and pip install --require-hashes pinned deps there.
+# Integrity lock: dependencies are installed ONLY via 'pip install --require-hashes -r
+# bridge/requirements.txt' inside the venv. If hashes cannot be verified, we never
+# retry without hashes and never install unpinned — we fall back to already-present
+# system deps (pacman-managed) or fail with instructions.
 say "setting up isolated venv → $VENV"
-if ! python3 -m venv "$VENV" 2>/dev/null; then
-  warn "python3 -m venv failed — is python-venv installed? try: sudo pacman -S python"
-  # fallback: check if system already has deps via pacman
-  if python3 -c "import requests, bs4, lxml" 2>/dev/null; then
-    warn "using system python deps as fallback (venv unavailable)"
-    # create wrapper that uses system python3
-    cat > "$WRAPPER" <<EOS
-#!/usr/bin/env bash
-exec python3 "$BRIDGE_DST" "\$@"
-EOS
-    chmod +x "$WRAPPER"
-  else
-    warn "no venv and no system deps — bridge will fail. Install: sudo pacman -S python-requests python-beautifulsoup4 python-lxml"
-    cat > "$WRAPPER" <<EOS
-#!/usr/bin/env bash
-exec python3 "$BRIDGE_DST" "\$@"
-EOS
-    chmod +x "$WRAPPER"
-  fi
-else
-  # venv created; install pinned hashed deps there
-  say "installing pinned deps into venv (no --user/--system, --require-hashes) ..."
-  if [[ -f "$REQ_TXT" ]]; then
-    if ! "$VENV_PIP" install --require-hashes -r "$REQ_TXT" >/dev/null 2>&1; then
-      warn "pip install --require-hashes failed — trying without hashes"
-      if ! "$VENV_PIP" install -r "$REQ_TXT" >/dev/null 2>&1; then
-        warn "venv pip install failed — network or hash mismatch. Bridge may still work if system deps exist."
-      fi
-    fi
-  else
-    warn "bridge/requirements.txt missing — installing unpinned (should not happen)"
-    "$VENV_PIP" install requests beautifulsoup4 lxml soupsieve 2>/dev/null || true
-  fi
-  if "$VENV_PY" -c "import requests, bs4, lxml" 2>/dev/null; then
-    say "Python deps OK (isolated venv)"
-  else
-    warn "venv deps still missing — try: sudo pacman -S python-requests python-beautifulsoup4 python-lxml as fallback"
-  fi
-  # wrapper that always uses venv python
+write_wrapper() {
   cat > "$WRAPPER" <<EOS
 #!/usr/bin/env bash
-exec "$VENV_PY" "$BRIDGE_DST" "\$@"
+exec "$1" "$BRIDGE_DST" "\$@"
 EOS
   chmod +x "$WRAPPER"
+}
+
+BRIDGE_PY=""
+if python3 -m venv "$VENV" 2>/dev/null && [[ -x "$VENV_PIP" ]]; then
+  if [[ ! -f "$REQ_TXT" ]]; then
+    warn "bridge/requirements.txt missing — refusing unpinned install (integrity lock)"
+  elif "$VENV_PIP" install --require-hashes -r "$REQ_TXT" >/dev/null 2>&1; then
+    say "Python deps OK (isolated venv, --require-hashes)"
+    BRIDGE_PY="$VENV_PY"
+  else
+    warn "pip --require-hashes failed — refusing unpinned retry (integrity lock)"
+  fi
+  # venv may already hold deps from a prior successful hashed install
+  if [[ -z "$BRIDGE_PY" ]] && "$VENV_PY" -c "import requests, bs4, lxml" 2>/dev/null; then
+    BRIDGE_PY="$VENV_PY"
+  fi
+else
+  warn "python3 -m venv failed — is python-venv installed? (sudo pacman -S python)"
 fi
+
+# Never install without hashes. Use system python only if deps are already present
+# (managed by pacman/user) — otherwise instruct and continue non-fatal.
+if [[ -z "$BRIDGE_PY" ]]; then
+  if python3 -c "import requests, bs4, lxml" 2>/dev/null; then
+    warn "using system python deps (no new installs performed)"
+    BRIDGE_PY="python3"
+  else
+    warn "no integrity-verified deps available — run: sudo pacman -S python-requests python-beautifulsoup4 python-lxml"
+    BRIDGE_PY="python3"
+  fi
+fi
+write_wrapper "$BRIDGE_PY"
 
 # Verify bridge via isolated wrapper (non-fatal — still write version to avoid restart loop)
 say "verifying bridge ..."
