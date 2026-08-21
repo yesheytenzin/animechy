@@ -30,7 +30,7 @@ import hashlib
 import subprocess
 import os
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 try:
     import requests
@@ -52,6 +52,35 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 session = requests.Session()
 session.headers.update(HEADERS)
+
+ALLOWED_COVER_HOSTS = {"cdn.xlsbox.com", "anidb.app", "cdn.anidb.app"}
+COVER_PATH_RE = re.compile(r"\.(jpg|jpeg|png|webp)(\?.*)?$", re.IGNORECASE)
+
+def _sanitize_cover_url(u: str) -> str:
+    if not u or not isinstance(u, str):
+        return ""
+    u = u.strip()
+    if u.startswith("//"):
+        u = "https:" + u
+    try:
+        p = urlparse(u)
+    except Exception:
+        return ""
+    if p.scheme != "https":
+        return ""
+    host = (p.hostname or "").lower()
+    if host not in ALLOWED_COVER_HOSTS:
+        return ""
+    # reject userinfo tricks (user:pass@host) and non-standard ports
+    if p.username or p.password:
+        return ""
+    if p.port not in (None, 443):
+        return ""
+    # must be an image path; reject query tricks
+    if not COVER_PATH_RE.search(p.path or ""):
+        return ""
+    # reconstruct to avoid userinfo / port tricks
+    return f"https://{host}{p.path or '/'}" + (f"?{p.query}" if p.query else "")
 
 def log(msg):
     print(f"[bridge] {msg}", file=sys.stderr, flush=True)
@@ -199,6 +228,7 @@ def do_search(q: str, page: int = 1):
         # rating: look for star badge like 8.4
         rating = None
         rm = re.search(r'(\d+\.\d).*?★|★.*?(\d+\.\d)', chunk)
+        cover = _sanitize_cover_url(cover)
         # fallback: not critical
         items.append({
             "id": aid,
@@ -229,8 +259,7 @@ def do_search(q: str, page: int = 1):
                 img = a.find("img")
                 if img:
                     cover = img.get("data-src") or img.get("src") or ""
-                    if cover.startswith("//"):
-                        cover = "https:" + cover
+                    cover = _sanitize_cover_url(cover)
                 items.append({"id": aid, "title": title, "cover": cover, "year": "", "rating": None, "stype": 1})
         except Exception:
             pass
@@ -349,6 +378,7 @@ def do_details(aid: str):
         mcover = re.search(r'https://cdn\.xlsbox\.com[^"\']+\.(?:jpg|png|webp)', html)
         if mcover:
             cover = mcover.group(0)
+    cover = _sanitize_cover_url(cover)
 
     # seasons: look for Seasons header
     seasons = []
@@ -690,12 +720,11 @@ def do_homepage(page: int = 1, per_page: int = 24, tab: str = "2"):
         cm = re.search(r'(?:data-src|src)="([^"]+(?:cdn\.xlsbox\.com|anidb\.app)[^"]+\.(?:jpg|png|webp))"', chunk)
         if cm:
             cover = cm.group(1)
-            if cover.startswith("//"):
-                cover = "https:" + cover
         if not cover:
             cm2 = re.search(r'https://cdn\.xlsbox\.com[^"]+\.(?:jpg|png|webp)', chunk)
             if cm2:
                 cover = cm2.group(0)
+        cover = _sanitize_cover_url(cover)
         items.append({"id": aid, "title": title, "cover": cover, "year": "", "rating": None})
         if len(items) >= per_page * 2:
             break

@@ -10,7 +10,7 @@ Quickshell bar widget for anime — click **ア** → search → pick season/epi
 omarchy plugin add https://github.com/yesheytenzin/animechy.git --enable
 ```
 
-The `animechy-setup.sh` auto-runs on first click (copies bridge to `~/.cache/animechy/`, installs `requests`+`bs4`+`lxml`, verifies `ping`+`search`). Click **ア** in the top bar to browse. Nothing is ever written inside the plugin dir, so the shell never restarts/blinks.
+The `animechy-setup.sh` auto-runs on first click (copies bridge to `~/.cache/animechy/`, creates an **isolated venv** with pinned+hashed deps from `bridge/requirements.txt` — never touches user/system site-packages — verifies `ping`+`search`, then restarts the shell once). Click **ア** in the top bar to browse. Nothing is ever written inside the plugin dir, so the shell never blinks/restarts in a loop.
 
 ## Update
 

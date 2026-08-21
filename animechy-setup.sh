@@ -21,77 +21,91 @@ command -v python3 >/dev/null 2>&1 || fail "python3 not found — install python
 
 mkdir -p "$RUNTIME"
 
-# If already installed and version matches, exit early (no ping check — avoids reinstall loop on offline fresh install)
-if [[ -x "$BRIDGE_DST" && -f "$VERSION_FILE" && "$(cat "$VERSION_FILE")" == "$VERSION" ]]; then
-  say "bridge $VERSION already installed"
-  exit 0
+VENV="$RUNTIME/venv"
+VENV_PY="$VENV/bin/python"
+VENV_PIP="$VENV/bin/pip"
+WRAPPER="$RUNTIME/animechy-bridge"
+REQ_TXT="$DIR/bridge/requirements.txt"
+
+# If already installed with matching version and isolated venv intact, exit early (no network/ping needed)
+if [[ -x "$BRIDGE_DST" && -x "$VENV_PY" && -f "$VERSION_FILE" && "$(cat "$VERSION_FILE")" == "$VERSION" ]]; then
+  if "$VENV_PY" -c "import requests, bs4, lxml" 2>/dev/null; then
+    say "bridge $VERSION already installed (isolated venv)"
+    exit 0
+  fi
+  warn "venv present but deps missing — reinstalling"
 fi
 
 # Copy bridge
 say "installing bridge $VERSION → $BRIDGE_DST"
 install -Dm0755 "$BRIDGE_SRC" "$BRIDGE_DST"
 
-# Ensure deps: requests, beautifulsoup4, lxml
-# Try pipx > uv > pip --user > system packages via pacman check
-need_install=false
-if ! python3 -c "import requests, bs4, lxml" 2>/dev/null; then
-  need_install=true
-  say "missing Python deps — installing requests beautifulsoup4 lxml"
-fi
-
-if $need_install; then
-  installed=false
-  # try pipx
-  if command -v pipx >/dev/null 2>&1; then
-    say "trying pipx install ..."
-    if pipx install requests beautifulsoup4 lxml >/dev/null 2>&1; then installed=true; fi
-  fi
-  # try uv
-  if ! $installed && command -v uv >/dev/null 2>&1; then
-    say "trying uv pip install --system ..."
-    if uv pip install --system requests beautifulsoup4 lxml >/dev/null 2>&1; then installed=true; fi
-  fi
-  # try pip3 --user
-  if ! $installed && command -v pip3 >/dev/null 2>&1; then
-    say "trying pip3 install --user ..."
-    if pip3 install --user requests beautifulsoup4 lxml >/dev/null 2>&1; then installed=true; fi
-  fi
-  # try pip (python -m pip)
-  if ! $installed && python3 -m pip --version >/dev/null 2>&1; then
-    say "trying python3 -m pip install --user ..."
-    if python3 -m pip install --user requests beautifulsoup4 lxml >/dev/null 2>&1; then installed=true; fi
-  fi
-  # fallback: check if pacman can install
-  if ! $installed; then
-    if command -v pacman >/dev/null 2>&1; then
-      warn "pip install failed — try: sudo pacman -S python-requests python-beautifulsoup4 python-lxml"
-    else
-      warn "could not install deps automatically — please run: pip3 install --user requests beautifulsoup4 lxml"
-    fi
-  fi
-
-  # verify again
-  if ! python3 -c "import requests, bs4, lxml" 2>/dev/null; then
-    warn "deps still missing — bridge may fail. Install manually: pip3 install --user requests beautifulsoup4 lxml"
+# --- Isolated venv (never mutates user/system site-packages) ---
+# Previous versions used pipx / uv --system / pip --user which mutated global env.
+# Now we create $RUNTIME/venv and pip install --require-hashes pinned deps there.
+say "setting up isolated venv → $VENV"
+if ! python3 -m venv "$VENV" 2>/dev/null; then
+  warn "python3 -m venv failed — is python-venv installed? try: sudo pacman -S python"
+  # fallback: check if system already has deps via pacman
+  if python3 -c "import requests, bs4, lxml" 2>/dev/null; then
+    warn "using system python deps as fallback (venv unavailable)"
+    # create wrapper that uses system python3
+    cat > "$WRAPPER" <<EOS
+#!/usr/bin/env bash
+exec python3 "$BRIDGE_DST" "\$@"
+EOS
+    chmod +x "$WRAPPER"
   else
-    say "Python deps OK"
+    warn "no venv and no system deps — bridge will fail. Install: sudo pacman -S python-requests python-beautifulsoup4 python-lxml"
+    cat > "$WRAPPER" <<EOS
+#!/usr/bin/env bash
+exec python3 "$BRIDGE_DST" "\$@"
+EOS
+    chmod +x "$WRAPPER"
   fi
 else
-  say "Python deps OK (requests + bs4 + lxml present)"
+  # venv created; install pinned hashed deps there
+  say "installing pinned deps into venv (no --user/--system, --require-hashes) ..."
+  if [[ -f "$REQ_TXT" ]]; then
+    if ! "$VENV_PIP" install --require-hashes -r "$REQ_TXT" >/dev/null 2>&1; then
+      warn "pip install --require-hashes failed — trying without hashes"
+      if ! "$VENV_PIP" install -r "$REQ_TXT" >/dev/null 2>&1; then
+        warn "venv pip install failed — network or hash mismatch. Bridge may still work if system deps exist."
+      fi
+    fi
+  else
+    warn "bridge/requirements.txt missing — installing unpinned (should not happen)"
+    "$VENV_PIP" install requests beautifulsoup4 lxml soupsieve 2>/dev/null || true
+  fi
+  if "$VENV_PY" -c "import requests, bs4, lxml" 2>/dev/null; then
+    say "Python deps OK (isolated venv)"
+  else
+    warn "venv deps still missing — try: sudo pacman -S python-requests python-beautifulsoup4 python-lxml as fallback"
+  fi
+  # wrapper that always uses venv python
+  cat > "$WRAPPER" <<EOS
+#!/usr/bin/env bash
+exec "$VENV_PY" "$BRIDGE_DST" "\$@"
+EOS
+  chmod +x "$WRAPPER"
 fi
 
-# Verify bridge (non-fatal on fresh install without network — still write version to avoid restart loop)
+# Verify bridge via isolated wrapper (non-fatal — still write version to avoid restart loop)
 say "verifying bridge ..."
-if ! python3 "$BRIDGE_DST" '{"cmd":"ping"}' 2>/dev/null | grep -q '"ok": *true'; then
-  warn "bridge ping failed — check python deps and bridge script; continuing anyway"
-  python3 "$BRIDGE_DST" '{"cmd":"ping"}' || true
+BRIDGE_CMD=("$WRAPPER")
+if [[ ! -x "$WRAPPER" ]]; then
+  BRIDGE_CMD=(python3 "$BRIDGE_DST")
+fi
+if ! "${BRIDGE_CMD[@]}" '{"cmd":"ping"}' 2>/dev/null | grep -q '"ok": *true'; then
+  warn "bridge ping failed — check venv deps and bridge script; continuing anyway"
+  "${BRIDGE_CMD[@]}" '{"cmd":"ping"}' || true
 else
-  say "bridge ping OK"
+  say "bridge ping OK (via ${BRIDGE_CMD[0]})"
 fi
 
 # Quick functional test (search) — best-effort, no fail
 say "testing search ..."
-if python3 "$BRIDGE_DST" '{"cmd":"search","q":"one piece"}' 2>/dev/null | grep -q '"ok": *true'; then
+if "${BRIDGE_CMD[@]}" '{"cmd":"search","q":"one piece"}' 2>/dev/null | grep -q '"ok": *true'; then
   say "search OK"
 else
   warn "search test failed — network or anidb.app may be blocked (expected on offline fresh install)"

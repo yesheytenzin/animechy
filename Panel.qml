@@ -13,6 +13,7 @@ Panel {
     property var hostWidget: null
     readonly property var barIdentity: hostWidget || root
     readonly property string bridge: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/animechy/animechy-bridge.py"
+    readonly property string bridgeWrapper: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/animechy/animechy-bridge"
     // ---------------- state ----------------
     property string view: "home"
     // home | grid | details
@@ -113,28 +114,48 @@ Panel {
         root._start(cmd, params, cb);
     }
 
+    function _bridgeCmd(json) {
+        // isolated venv wrapper (setup.sh creates $XDG_CACHE_HOME/animechy/animechy-bridge)
+        // fall back to python3+bridge.py if wrapper not yet present (very early boot)
+        var w = root.bridgeWrapper;
+        var b = root.bridge;
+        // Use bash to try wrapper first; avoids QML file-existence check
+        return ["/bin/bash", "-c", "if [[ -x \"" + w + "\" ]]; then exec \"" + w + "\" \"$1\"; else exec python3 \"" + b + "\" \"$1\"; fi", "_", json];
+    }
     function _start(cmd, params, cb) {
         bridgeProc.collected = "";
         root.cbChain = cb;
         var req = JSON.parse(JSON.stringify(params));
         req.cmd = cmd;
-        bridgeProc.command = ["python3", root.bridge, JSON.stringify(req)];
+        bridgeProc.command = root._bridgeCmd(JSON.stringify(req));
         bridgeProc.running = true;
     }
 
     // ---------------- helpers ----------------
+    function _isAllowedCoverUrl(u) {
+        if (!u || typeof u !== "string") return false;
+        u = u.trim();
+        if (u.startsWith("//")) u = "https:" + u;
+        var m = u.match(/^https:\/\/([^\/]+)(\/.*)?$/);
+        if (!m) return false;
+        var host = m[1].toLowerCase();
+        if (host !== "cdn.xlsbox.com" && host !== "anidb.app" && host !== "cdn.anidb.app") return false;
+        if (!/\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(m[2] || "")) return false;
+        return true;
+    }
+    function _sanitizeCoverUrl(u) {
+        if (!_isAllowedCoverUrl(u)) return "";
+        if (u.trim().startsWith("//")) return "https:" + u.trim();
+        return u.trim();
+    }
     function coverUrlOf(obj) {
-        if (!obj)
-            return "";
-
+        if (!obj) return "";
+        var raw = "";
         var c = obj.cover;
-        if (c && typeof c === "object")
-            return c.url || "";
-
-        if (typeof c === "string")
-            return c;
-
-        return obj.coverUrl || "";
+        if (c && typeof c === "object") raw = c.url || "";
+        else if (typeof c === "string") raw = c;
+        else raw = obj.coverUrl || "";
+        return _sanitizeCoverUrl(raw);
     }
 
     // ---------------- actions ----------------
@@ -238,7 +259,7 @@ Panel {
         root.busyLabel = "Loading details & episodes …";
         root.statusText = "Loading “" + it.title + "” …";
         root.view = "details";
-        detailPoster.source = it.cover || "";
+        detailPoster.source = _sanitizeCoverUrl(it.cover || "");
         // fetch details and episodes in parallel — episodes start immediately
         root.loadEpisodes(it.id, gen);
         request("details", {
@@ -375,7 +396,7 @@ Panel {
                 root.curEp = String(ep);
             }
         };
-        streamsProc.command = ["python3", root.bridge, JSON.stringify(req)];
+        streamsProc.command = root._bridgeCmd(JSON.stringify(req));
         streamsProc.running = true;
     }
 
@@ -417,7 +438,7 @@ Panel {
             "id": id
         });
         prefetchProc.collected = "";
-        prefetchProc.command = ["python3", root.bridge, req];
+        prefetchProc.command = root._bridgeCmd(req);
         prefetchProc.running = true;
     }
 
@@ -1097,7 +1118,7 @@ Panel {
 
                                         Image {
                                             anchors.fill: parent
-                                            source: model.cover || model.coverPath || ""
+                                            source: root._sanitizeCoverUrl(model.cover || model.coverPath || "")
                                             fillMode: Image.PreserveAspectCrop
                                             visible: source !== ""
                                             asynchronous: true
@@ -1252,7 +1273,7 @@ Panel {
 
                                 Image {
                                     anchors.fill: parent
-                                    source: model.cover || model.coverPath || ""
+                                    source: root._sanitizeCoverUrl(model.cover || model.coverPath || "")
                                     fillMode: Image.PreserveAspectCrop
                                     visible: source !== ""
                                     asynchronous: true
