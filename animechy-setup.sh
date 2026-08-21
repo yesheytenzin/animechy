@@ -102,6 +102,9 @@ printf '%s\n' "$VERSION" > "$VERSION_FILE.new"
 mv -f "$VERSION_FILE.new" "$VERSION_FILE"
 
 say "installed $BRIDGE_DST ($VERSION) — ready"
-# No shell restart needed — bridge lives outside the watched plugin dir.
+# Fresh install finished: ask the host to restart the Omarchy shell exactly ONCE.
+# BarWidget.qml parses this marker and runs omarchy-restart-shell; the
+# "already installed" early-exit above never prints it, so no restart loop.
+echo "ANIMECHY_RESTART_SHELL=1"
 
 exit 0

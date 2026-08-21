@@ -19,6 +19,7 @@ BarWidget {
     property bool installing: false
     property string bridgeError: ""
     property bool userClickedInstall: false
+    property bool shellRestartQueued: false
 
     function ensureBridge() {
         if (setupProc.running) return;
@@ -123,6 +124,14 @@ BarWidget {
             }
             var restartScheduled = out.indexOf("ANIMECHY_RESTART_SHELL=1") !== -1;
             if (restartScheduled) {
+                // Fresh install finished — restart the shell exactly ONCE.
+                // Keep the pending-open marker so the panel auto-opens after restart.
+                if (!root.shellRestartQueued) {
+                    root.shellRestartQueued = true;
+                    notify("Animechy — Installed", "Restarting Omarchy shell once …", "normal");
+                    restartProc.command = ["bash", "-c", "command -v omarchy-restart-shell >/dev/null 2>&1 && exec omarchy-restart-shell || echo 'omarchy-restart-shell not found; skipping'"];
+                    restartProc.running = true;
+                }
                 return;
             }
             if (root.userClickedInstall) {
@@ -152,6 +161,10 @@ BarWidget {
 
     Process {
         id: notifyProc
+    }
+
+    Process {
+        id: restartProc
     }
 
     Timer {
