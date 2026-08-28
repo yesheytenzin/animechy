@@ -1,5 +1,9 @@
 # Animechy — Omarchy Quattro Anime Bar Plugin
 
+<p align="center">
+  <img src="animechy.png" alt="Animechy" width="800" />
+</p>
+
 > **Credit:** [ani-cli](https://github.com/pystardust/ani-cli) by [pystardust](https://github.com/pystardust) (GPL-3.0) — scraping logic for `anidb.app`
 
 Quickshell bar widget for anime — click **ア** → search → pick season/episode (sub/dub) → stream in `mpv`. No Rust/compile, pure Python bridge. No manual prerequisites — fresh Omarchy already includes `mpv`+`python`; `requests`/`beautifulsoup4`/`lxml` auto-install on first click via `animechy-setup.sh` (`pipx`/`uv`/`pip --user`).
